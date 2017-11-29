@@ -1,157 +1,273 @@
 'use strict';
 
-var path = require('path');
-var camelcase = require('camel-case');
-var gm = require('global-modules');
-var glob = require('matched');
-var home = require('homedir-polyfill');
-var isObject = require('isobject');
-var merge = require('merge-deep');
-var read = require('read-data');
+const fs = require('fs');
+const path = require('path');
+const glob = require('matched');
+const read = require('read-data');
+const arrayify = require('arrayify-compact');
+const merge = require('merge-deep');
+const File = require('vinyl');
+const use = require('use');
 
-function configs(name, types, options) {
-  if (typeof name !== 'string') {
-    throw new TypeError('expected name to be a string');
+/**
+ * Create an instance of `MergeConfig` with the given `options`.
+ *
+ * ```js
+ * const MergeConfigs = require('merge-configs');
+ * const mergeConfigs = new MergeConfigs();
+ * ```
+ * @param {Object} `options`
+ * @return {Object} Instance of `MergeConfig`
+ * @api public
+ */
+
+class MergeConfig {
+  constructor(defaults) {
+    this.defaults = Object.assign({}, defaults);
+    this.defaults.patterns = arrayify(this.defaults.patterns);
+
+    this.options = this.defaults.options || {};
+    this.settings = {};
+    this.loaders = {};
+    this.config = {};
+    this.types = {};
+
+    if (this.options.builtins !== false) {
+      this.builtins();
+    }
   }
 
-  if (isObject(types)) {
-    var temp = options;
-    options = types;
-    types = temp;
+  /**
+   * Built-in loaders
+   */
+
+  builtins() {
+    this.loader('yml', file => read.yaml.sync(file.path));
+    this.loader('yaml', file => read.yaml.sync(file.path));
+    this.loader('json', file => read.json.sync(file.path));
+    this.loader('js', file => require(file.path));
   }
 
-  var opts = Object.assign({}, options);
-  var key = camelcase(name);
-  types = arrayify(types || opts.types).map(function(name) {
-    return name === 'package' ? 'pkg' : name;
-  });
+  /**
+   * Create a new config type with the given settings
+   * @param {String} `type`
+   * @param {Object} `settings` Must have a `.patterns` property with a string or array of globs.
+   * @return {Object}
+   */
 
-  var defaults = createPatterns(name, opts);
-  var config = {};
-  var js = [];
-
-  for (var i = 0; i < defaults.length; i++) {
-    var location = defaults[i];
-    if (types.length && types.indexOf(location.type) === -1) {
-      continue;
+  setType(type, settings) {
+    if (typeof type !== 'string') {
+      throw new TypeError('expected type to be a string');
     }
 
-    var typeOpts = merge({dot: true}, location, opts.config);
-    var files = glob.sync(typeOpts.patterns, typeOpts);
+    settings = Object.assign({}, settings);
+    settings.patterns = arrayify(settings.patterns);
+    settings = merge({}, this.defaults, settings);
 
-    config[typeOpts.type] = files.reduce(function(acc, basename) {
-      var fp = path.join(typeOpts.cwd, basename);
-      var ext = path.extname(basename);
-      var file = {type: location, path: fp, basename: basename, extname: ext};
-
-      if (typeof opts.filter === 'function' && opts.filter(file) === false) {
-        return acc;
-      }
-
-      if (ext === '.js') {
-        js.push(fp);
-        return acc;
-      }
-
-      if (!/\.(ya?ml|json)$/.test(ext)) {
-        return acc;
-      }
-
-      var data = read.sync(fp);
-      if (basename === 'package.json') {
-        data = data[key] || data[name] || {};
-      }
-
-      acc = merge({}, acc, data);
-      return acc;
-    }, {});
-  }
-
-  if (types.length && opts.merge !== false) {
-    config.merged = mergeConfigs(types, config);
-  }
-
-  config.js = js;
-  return config;
-}
-
-function createPatterns(name, options) {
-  var opts = Object.assign({cwd: process.cwd(), dot: true}, options);
-  var files = opts.files || [
-    `.${name}*.{json,yaml,yml}`,
-    `${name}*.js`
-  ];
-
-  return [
-    {
-      type: 'pkg',
-      cwd: opts.cwd,
-      patterns: ['package.json']
-    },
-    {
-      type: 'cwd',
-      cwd: opts.cwd,
-      patterns: files
-    },
-    {
-      type: 'local',
-      cwd: path.join(opts.cwd, 'node_modules'),
-      patterns: prepend({
-        dir: `${name}-config-*`,
-        files: files
-      })
-    },
-    {
-      type: 'global',
-      cwd: opts.global || gm,
-      patterns: prepend({
-        dir: `${name}-config-*`,
-        files: files
-      })
-    },
-    {
-      type: 'home',
-      cwd: opts.home || home(),
-      patterns: prepend({
-        dir: `.${name}`,
-        files: files
-      })
+    if (settings.patterns.length === 0) {
+      throw new TypeError('expected glob patterns to be a string or array');
     }
-  ];
-}
 
-function prepend(options) {
-  var patterns = arrayify(options.files).slice();
-  var prefix = options.dir;
-  if (!prefix) return patterns;
-  for (var i = 0; i < patterns.length; i++) {
-    patterns[i] = prefix + '/' + patterns[i];
+    this.settings[type] = settings;
+    this.types[type] = { files: [], data: {} };
+    return this;
   }
-  return patterns;
-}
 
-function mergeConfigs(keys, configs) {
-  var config = {};
-  for (var i = 0; i < keys.length; i++) {
-    var key = keys[i];
-    var obj = configs[key];
-    if (obj.only === true) {
-      return obj;
+  /**
+   * Get config `type`.
+   * @param {String} `type`
+   * @return {Object}
+   */
+
+  getType(type) {
+    if (typeof type !== 'string') {
+      throw new TypeError('expected type to be a string');
     }
-    if (!isObject(obj) || obj.merge === false) {
-      continue;
+    if (!this.types.hasOwnProperty(type)) {
+      throw new Error(`config type "${type}" does not exist`);
     }
-    config = merge({}, config, obj);
+    return this.types[type];
   }
-  return config;
-}
 
-function arrayify(val) {
-  return val ? (Array.isArray(val) ? val : [val]) : [];
+  /**
+   * Set config `type` with the given `settings`, or get `type` if
+   * `settings` is undefined.
+   *
+   * @param {String} `type`
+   * @param {Object} `settings` (optional)
+   * @return {Object}
+   * @api public
+   */
+
+  type(type, settings) {
+    if (typeof type !== 'string') {
+      throw new TypeError('expected type to be a string');
+    }
+
+    if (typeof settings === 'undefined') {
+      return this.getType(type);
+    }
+
+    this.setType(type, settings);
+    return this;
+  }
+
+  /**
+   * Resolve config files for the given `type`.
+   *
+   * @param {String} `type`
+   * @return {Object}
+   * @api public
+   */
+
+  resolve(type) {
+    if (typeof type !== 'string') {
+      throw new TypeError('expected type to be a string');
+    }
+    if (!this.settings.hasOwnProperty(type)) {
+      throw new Error(`config type "${type}" does not exist`);
+    }
+
+    const settings = this.settings[type];
+    const files = glob.sync(settings.patterns, settings.options);
+    const cwd = settings.options.cwd;
+    const res = [];
+
+    for (let filename of files) {
+      const filepath = path.resolve(cwd, filename);
+      const file = new File({path: filepath, cwd: cwd});
+      if (typeof settings.filter === 'function' && !settings.filter(file)) {
+        continue;
+      }
+      res.push(file);
+    }
+    return res;
+  }
+
+  /**
+   * Register a loader for a type of file, by `extname`. Loaders are functions
+   * that receive a [vinyl][] `file` object as the only argument and should
+   * return the config object to use.
+   *
+   * ```js
+   * // example of loading eslint config files
+   * config.loader('json', file => {
+   *   const data = JSON.parse(file.contents);
+   *   if (file.basename === 'package.json') {
+   *     return data.eslintConfig;
+   *   }
+   *   if (file.basename === '.eslintrc.json') {
+   *     return data;
+   *   }
+   *   return {};
+   * });
+   * ```
+   * @param {String} `extname` File extension to associate with the loader
+   * @param {Function} `fn` Loader function.
+   * @return {Object}
+   * @api public
+   */
+
+  loader(extname, fn) {
+    if (typeof extname !== 'string') {
+      throw new TypeError('expected extname to be a string');
+    }
+    if (typeof fn !== 'function') {
+      throw new TypeError('expected loader to be a function');
+    }
+    if (extname[0] !== '.') {
+      extname = '.' + extname;
+    }
+    this.loaders[extname] = fn;
+    return this;
+  }
+
+  /**
+   * Load one or more config types.
+   *
+   * @param {String|Array} `types` Loads all types if undefined.
+   * @return {Object} Returns the merged config object.
+   * @api public
+   */
+
+  load(types) {
+    if (!types) types = Object.keys(this.types);
+    const configs = {};
+    for (const type of arrayify(types)) {
+      configs[type] = this.loadType(type);
+    }
+    return configs;
+  }
+
+  /**
+   * Load a single config type.
+   * @param {String} `type`
+   * @return {Object} Returns the merged config object for the type
+   */
+
+  loadType(type) {
+    const config = this.getType(type);
+    const files = this.resolve(type);
+    config.files = files;
+
+    for (const file of files) {
+      config.data = merge({}, config.data, this.loadFile(file, config));
+    }
+
+    return config;
+  }
+
+  /**
+   * Load config `file`
+   * @param {Object} `file`
+   * @param {Object} `config`
+   * @return {Object} Returns the loaded config data.
+   */
+
+  loadFile(file, config) {
+    const loader = this.loaders[file.extname];
+    if (!loader) {
+      throw new Error('no loaders exist for: ' + file.extname);
+    }
+
+    file.contents = fs.readFileSync(file.path);
+    file.data = loader.call(this, file);
+
+    if (typeof config.load === 'function') {
+      file.data = config.load(file);
+    }
+    return file.data;
+  }
+
+  /**
+   * Merge one or more registered config types.
+   *
+   * @param {String|Array} `types` Merges all types if undefined.
+   * @return {Object} Returns the merged config object.
+   * @api public
+   */
+
+  merge(types, fn) {
+    if (typeof types === 'function') {
+      return this.merge(null, types);
+    }
+
+    if (!types) types = Object.keys(this.types);
+    for (const type of arrayify(types)) {
+      const config = this.getType(type);
+
+      if (typeof fn === 'function') {
+        this.config = fn(config.data, this.config);
+      } else {
+        this.config = merge({}, this.config, config.data);
+      }
+    }
+    return this.config;
+  }
 }
 
 /**
- * Expose `configs`
+ * Expose `MergeConfig`
  */
 
-module.exports = configs;
+module.exports = MergeConfig;

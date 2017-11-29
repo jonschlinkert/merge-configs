@@ -10,8 +10,7 @@
   },
   "license": "MIT",
   "files": [
-    "index.js",
-    "utils.js"
+    "index.js"
   ],
   "main": "index.js",
   "engines": {
@@ -21,17 +20,18 @@
     "test": "mocha"
   },
   "dependencies": {
-    "camel-case": "^3.0.0",
+    "arrayify-compact": "^0.2.0",
     "global-modules": "^0.2.3",
     "homedir-polyfill": "^1.0.1",
-    "isobject": "^3.0.0",
     "matched": "^0.4.4",
     "merge-deep": "^3.0.0",
-    "read-data": "^1.0.0"
+    "read-data": "^1.0.0",
+    "use": "^3.0.0",
+    "vinyl": "^2.1.0"
   },
   "devDependencies": {
-    "gulp-format-md": "^0.1.12",
-    "mocha": "^3.2.0"
+    "mocha": "^3.2.0",
+    "gulp-format-md": "^0.1.12"
   },
   "keywords": [
     "configs",
@@ -48,6 +48,15 @@
     ],
     "lint": {
       "reflinks": true
+    }
+  },
+  "lintDeps": {
+    "devDependencies": {
+      "files": {
+        "patterns": [
+          "configs.js"
+        ]
+      }
     }
   }
 }
