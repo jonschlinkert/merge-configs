@@ -104,4 +104,30 @@ describe('.load', function() {
       tags: ['a', 'b', 'c']
     });
   });
+
+  it('should call a load function on each file in a config type', function() {
+    let count = 0;
+
+    config.type('fixtures', {
+      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
+      load: (file, configs) => {
+        file.data[count] = count++;
+        return file.data;
+      },
+      options: {
+        cwd: fixtures('cwd')
+      }
+    });
+
+    const configs = config.load('fixtures');
+
+    assert.deepEqual(configs.fixtures.data, {
+      '0': 0,
+      '1': 1,
+      '2': 2,
+      layout: true,
+      list: ['one', 'two', 'three'],
+      tags: ['a', 'b', 'c']
+    });
+  });
 });

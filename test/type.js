@@ -16,6 +16,10 @@ describe('.type', function() {
     config.setType('cwd', { patterns: ['.foorc.json'] });
 
     assert.deepEqual(config.types.cwd, {
+      patterns: ['.foorc.json'],
+      options: {
+        cwd: fixtures()
+      },
       files: [],
       data: {}
     });
@@ -25,19 +29,12 @@ describe('.type', function() {
     config.type('cwd', { patterns: ['.foorc.json'] });
 
     assert.deepEqual(config.types.cwd, {
-      files: [],
-      data: {}
-    });
-  });
-
-  it('should add settings for a config type to config.settings', function() {
-    config.type('cwd', { patterns: ['.foorc.json'] });
-
-    assert.deepEqual(config.settings.cwd, {
       patterns: ['.foorc.json'],
       options: {
         cwd: fixtures()
-      }
+      },
+      files: [],
+      data: {}
     });
   });
 
@@ -46,23 +43,29 @@ describe('.type', function() {
       options: {
         foo: 'bar',
         cwd: fixtures()
-      }
+      },
+      files: [],
+      data: {}
     });
 
     config.type('cwd', {
       patterns: ['.foorc.json'],
       options: {
         baz: 'qux'
-      }
+      },
+      files: [],
+      data: {}
     });
 
-    assert.deepEqual(config.settings.cwd, {
+    assert.deepEqual(config.types.cwd, {
       patterns: ['.foorc.json'],
       options: {
         foo: 'bar',
         baz: 'qux',
         cwd: fixtures()
-      }
+      },
+      files: [],
+      data: {}
     });
   });
 });

@@ -38,4 +38,20 @@ describe('.resolve', function() {
     assert.equal(files[1].basename, '.fixture.yml');
     assert.equal(files[2].basename, 'fixturefile.js');
   });
+
+  it('should filter files when a filter function is passed on config', function() {
+    config.type('fixtures', {
+      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
+      filter: file => file.basename !== 'fixturefile.js',
+      options: {
+        cwd: fixtures('cwd')
+      }
+    });
+
+    const files = config.resolve('fixtures');
+    assert.equal(files.length, 2);
+    assert.equal(files[0].basename, '.fixture.json');
+    assert.equal(files[1].basename, '.fixture.yml');
+    assert.equal(typeof files[2], 'undefined');
+  });
 });

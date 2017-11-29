@@ -7,7 +7,6 @@ const read = require('read-data');
 const arrayify = require('arrayify-compact');
 const merge = require('merge-deep');
 const File = require('vinyl');
-const use = require('use');
 
 /**
  * Create an instance of `MergeConfig` with the given `options`.
@@ -27,9 +26,7 @@ class MergeConfig {
     this.defaults.patterns = arrayify(this.defaults.patterns);
 
     this.options = this.defaults.options || {};
-    this.settings = {};
     this.loaders = {};
-    this.config = {};
     this.types = {};
 
     if (this.options.builtins !== false) {
@@ -62,14 +59,13 @@ class MergeConfig {
 
     settings = Object.assign({}, settings);
     settings.patterns = arrayify(settings.patterns);
-    settings = merge({}, this.defaults, settings);
+    settings = merge({files: [], data: {}}, this.defaults, settings);
 
     if (settings.patterns.length === 0) {
       throw new TypeError('expected glob patterns to be a string or array');
     }
 
-    this.settings[type] = settings;
-    this.types[type] = { files: [], data: {} };
+    this.types[type] = settings;
     return this;
   }
 
@@ -100,14 +96,9 @@ class MergeConfig {
    */
 
   type(type, settings) {
-    if (typeof type !== 'string') {
-      throw new TypeError('expected type to be a string');
-    }
-
     if (typeof settings === 'undefined') {
       return this.getType(type);
     }
-
     this.setType(type, settings);
     return this;
   }
@@ -121,23 +112,18 @@ class MergeConfig {
    */
 
   resolve(type) {
-    if (typeof type !== 'string') {
-      throw new TypeError('expected type to be a string');
-    }
-    if (!this.settings.hasOwnProperty(type)) {
-      throw new Error(`config type "${type}" does not exist`);
-    }
-
-    const settings = this.settings[type];
-    const files = glob.sync(settings.patterns, settings.options);
-    const cwd = settings.options.cwd;
+    const config = this.type(type);
+    const files = glob.sync(config.patterns, config.options);
+    const cwd = config.options.cwd;
     const res = [];
 
     for (let filename of files) {
       const filepath = path.resolve(cwd, filename);
       const file = new File({path: filepath, cwd: cwd});
-      if (typeof settings.filter === 'function' && !settings.filter(file)) {
-        continue;
+      if (typeof config.filter === 'function') {
+        if (config.filter(file) === false) {
+          continue;
+        }
       }
       res.push(file);
     }
@@ -191,8 +177,8 @@ class MergeConfig {
    */
 
   load(types) {
-    if (!types) types = Object.keys(this.types);
     const configs = {};
+    if (!types) types = Object.keys(this.types);
     for (const type of arrayify(types)) {
       configs[type] = this.loadType(type);
     }
@@ -213,7 +199,6 @@ class MergeConfig {
     for (const file of files) {
       config.data = merge({}, config.data, this.loadFile(file, config));
     }
-
     return config;
   }
 
@@ -234,7 +219,7 @@ class MergeConfig {
     file.data = loader.call(this, file);
 
     if (typeof config.load === 'function') {
-      file.data = config.load(file);
+      file.data = config.load.call(this, file, config);
     }
     return file.data;
   }
@@ -248,21 +233,15 @@ class MergeConfig {
    */
 
   merge(types, fn) {
-    if (typeof types === 'function') {
-      return this.merge(null, types);
-    }
-
+    if (typeof types === 'function') return this.merge(null, types);
+    if (typeof fn !== 'function') fn = configType => configType.data;
     if (!types) types = Object.keys(this.types);
-    for (const type of arrayify(types)) {
-      const config = this.getType(type);
 
-      if (typeof fn === 'function') {
-        this.config = fn(config.data, this.config);
-      } else {
-        this.config = merge({}, this.config, config.data);
-      }
+    let config = {};
+    for (const type of arrayify(types)) {
+      config = merge({}, config, fn(this.getType(type), config));
     }
-    return this.config;
+    return config;
   }
 }
 
