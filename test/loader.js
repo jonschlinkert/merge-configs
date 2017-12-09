@@ -1,6 +1,7 @@
 'use strict';
 
 require('mocha');
+const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
 const MergeConfig = require('..');
@@ -30,7 +31,10 @@ describe('.loader', function() {
   });
 
   it('should use a custom loader type', function() {
-    config.loader('foo', file => JSON.parse(file.contents));
+    config.loader('foo', file => {
+      file.contents = fs.readFileSync(file.path);
+      return JSON.parse(file.contents);
+    });
     config.type('custom', {
       patterns: ['*.foo'],
       options: {

@@ -54,4 +54,23 @@ describe('.resolve', function() {
     assert.equal(files[1].basename, '.fixture.yml');
     assert.equal(typeof files[2], 'undefined');
   });
+
+  it('should filter files when defined on the ctor', function() {
+    config = new MergeConfig({
+      filter: file => file.basename !== 'fixturefile.js'
+    });
+
+    config.type('fixtures', {
+      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
+      options: {
+        cwd: fixtures('cwd')
+      }
+    });
+
+    const files = config.resolve('fixtures');
+    assert.equal(files.length, 2);
+    assert.equal(files[0].basename, '.fixture.json');
+    assert.equal(files[1].basename, '.fixture.yml');
+    assert.equal(typeof files[2], 'undefined');
+  });
 });
