@@ -1,6 +1,5 @@
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 const glob = require('matched');
 const read = require('read-data');
@@ -136,6 +135,9 @@ class MergeConfig {
    * return the config object to use.
    *
    * ```js
+   * // basic loader example
+   * config.loader('json', file => JSON.stringify(file.contents));
+   *
    * // example of loading eslint config files
    * config.loader('json', file => {
    *   const data = JSON.parse(file.contents);
@@ -215,7 +217,6 @@ class MergeConfig {
       throw new Error('no loaders exist for: ' + file.extname);
     }
 
-    file.contents = fs.readFileSync(file.path);
     file.data = loader.call(this, file);
 
     if (typeof config.load === 'function') {
