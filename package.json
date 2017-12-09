@@ -1,7 +1,7 @@
 {
   "name": "merge-configs",
   "description": "Find, load and merge JSON and YAML config settings from one or more files, in the specified order.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "homepage": "https://github.com/jonschlinkert/merge-configs",
   "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
   "repository": "jonschlinkert/merge-configs",
