@@ -2,6 +2,8 @@
 
 > Find, load and merge JSON and YAML config settings from one or more files, in the specified order.
 
+Please consider following this project's author, [Jon Schlinkert](https://github.com/jonschlinkert), and consider starring the project to show your :heart: and support.
+
 ## Install
 
 Install with [npm](https://www.npmjs.com/):
@@ -10,6 +12,14 @@ Install with [npm](https://www.npmjs.com/):
 $ npm install --save merge-configs
 ```
 
+### What does this do?
+
+This library makes it easy for your application to support config files similar to `.eslintrc.json`, `.travis.yml`, etc. by providing granular control over:
+
+* the patterns and directories to search for config files
+* how config files are loaded (or whether or not they should be loaded at all)
+* which config files are merged, and how they are merged
+
 ## Usage
 
 ```js
@@ -17,84 +27,22 @@ var merge = require('merge-configs');
 merge(name[, locations, options]);
 ```
 
-### Params
+## options
 
-* `name` **{String}** - (required) The module name (example: `eslint`, `babel`, `travis` etc)
-* `types` **{Array}** - (optional) The [config locations](#config-locations) or "types" to search. If specified, only the given locations will be searched. If undefined, all locations are searched.
-* `options` **{Object}** - see all [available options](#options)
-
-### What does this do?
-
-This library makes it easy for your application to support config files similar to `.eslintrc.json`, `.travis.yml`, etc.
-
-**How does it work?**
-
-We start with an empty config object that looks something like this:
-
-```js
-{ 
-  // config "locations"
-  pkg: {},     // namespaced object in "package.json"
-  cwd: {},     // config from files in "process.cwd()"
-  local: {},   // config from installed packages in local "node_modules"
-  global: {},  // config from installed packages in global "node_modules"
-  home: {},    // config from files in user home
-
-  // if a list of locations is passed, the "merged" object is created 
-  // by merging the config from each location, left-to-right. 
-  merged: {},
-
-  // array of absolute paths to any matching javascript 
-  // files. Useful for gulpfile.js, Gruntfile.js, etc.
-  js: [] 
-}
-```
-
-When `merge(name)` is called:
-
-1. [glob patterns](#glob-patterns) are created by combining your application's `name` with a list of directories that corresponds to the pre-defined locations, along with some minimal `*` wildcard magic.
-2. glob patterns are used to match files
-3. config is loaded onto the property for the respective "location" of matching files
-
-### Limit the search
-
-Pass a list of location names to limit the search _and merge config for those locations_:
-
-**Example**
-
-The following will limit the search to only the `pkg` and `cwd` patterns:
-
-```js
-console.log(merge('foo', ['pkg', 'cwd']));
-```
-
-## Options
-
-### options.locations
-
-**Type**: `array`
-
-**Default**: `undefined`
-
-Specify the locations to load onto the returned object.
-
-```js
-var config = merge('foo', {locations: ['cwd', 'home']});
-// locations can also be passed directly to the main export
-var config = merge('foo', ['cwd', 'home']);
-```
-
-### options.merge
+### options.builtins
 
 **Type**: `boolean`
 
 **Default**: `undefined`
 
-merge onto the `config.merged` object. No config objects will be merged onto `config.merged` unless specified.
-If one or more [locations](#optionstypes) are specified locations are merged onto the returned `config.merged` object.
+Disable built-in loaders.
 
 ```js
-var config = merge('foo', {merge: false});
+const mergeConfig = new MergeConfig({
+  options: {
+    builtins: false
+  }  
+});
 ```
 
 ### options.filter
@@ -103,75 +51,58 @@ var config = merge('foo', {merge: false});
 
 **Default**: `undefined`
 
-Filter files before they're added or merged onto the config.
+Filter files that are resolved by glob patterns. Useful for conditionally filtering out files based on contents or other variables.
 
 ```js
-var config = merge('foo', {
-  filter: function(file) {
-    return !/whatever/.test(file.path);
-  }
+// can be defined on the ctor options
+const mergeConfig = new MergeConfig({
+  options: {
+    filter: file => {
+      // "file" is a vinyl file
+      return file.stem === 'foo'
+    }
+  }  
 });
-```
 
-### options.files
-
-**Type**: `Array<string>`
-
-**Default**: `['.name*.{json,yaml,yml}', 'name*.js']` _(Note the leading `.` on the first string)_
-
-Specify the glob pattern to use for matching basenames.
-
-```js
-var config = merge('amazing', {
-  files: ['amazing.json']
-});
-```
-
-## Glob patterns
-
-In case it helps to visualize what this does, assuming no options are defined, the default list of glob patterns created by `merge-configs` looks something like this:
-
-```js
-[
-  {
-    type: 'pkg',
-    cwd: process.cwd(),
-    patterns: ['package.json']
-  },
-  {
-    type: 'cwd',
-    cwd: process.cwd(),
-    patterns: ['.foo*.{json,yaml,yml}', 'foo*.js']
-  },
-  {
-    type: 'local',
-    cwd: process.cwd() + '/node_modules',
-    patterns: ['foo-config-*/.foo*.{json,yaml,yml}', 'foo-config-*/foo*.js']
-  },
-  {
-    type: 'global',
-    cwd: '/usr/local/lib/node_modules', // depends on platform and custom settings
-    patterns: ['foo-config-*/.foo*.{json,yaml,yml}', 'foo-config-*/foo*.js']
-  },
-  {
-    type: 'home',
-    cwd: '/Users/jonschlinkert', // depends on platform and custom settings
-    patterns: ['.foo/.foo*.{json,yaml,yml}', '.foo/foo*.js']
+// or on the options for a specific config type
+mergeConfig.type('local', {
+  cwd: process.cwd(),
+  patterns: ['*.json'],
+  filter: file => {
+    return file.stem === 'foo'
   }
-]
+})
 ```
 
-merge-configs then loops over each "location" and loads any config files/settings found in that location.
+### Params
+
+* `name` **{String}** - (required) The module name (example: `eslint`, `babel`, `travis` etc)
+* `types` **{Array}** - (optional) The [config locations](#config-locations) or "types" to search. If specified, only the given locations will be searched. If undefined, all locations are searched.
+* `options` **{Object}** - see all [available options](#options)
 
 ## About
 
-### Contributing
+<details>
+<summary><strong>Contributing</strong></summary>
 
 Pull requests and stars are always welcome. For bugs and feature requests, [please create an issue](../../issues/new).
 
 Please read the [contributing guide](.github/contributing.md) for advice on opening issues, pull requests, and coding standards.
 
-### Building docs
+</details>
+
+<details>
+<summary><strong>Running Tests</strong></summary>
+
+Running and reviewing unit tests is a great way to get familiarized with a library and its API. You can install dependencies and run tests with the following command:
+
+```sh
+$ npm install && npm test
+```
+
+</details>
+<details>
+<summary><strong>Building docs</strong></summary>
 
 _(This project's readme.md is generated by [verb](https://github.com/verbose/verb-generate-readme), please don't edit the readme directly. Any changes to the readme must be made in the [.verb.md](.verb.md) readme template.)_
 
@@ -181,18 +112,13 @@ To generate the readme, run the following command:
 $ npm install -g verbose/verb#dev verb-generate-readme && verb
 ```
 
-### Running tests
-
-Running and reviewing unit tests is a great way to get familiarized with a library and its API. You can install dependencies and run tests with the following command:
-
-```sh
-$ npm install && npm test
-```
+</details>
 
 ### Author
 
 **Jon Schlinkert**
 
+* [linkedin/in/jonschlinkert](https://linkedin.com/in/jonschlinkert)
 * [github/jonschlinkert](https://github.com/jonschlinkert)
 * [twitter/jonschlinkert](https://twitter.com/jonschlinkert)
 
@@ -203,4 +129,4 @@ Released under the [MIT License](LICENSE).
 
 ***
 
-_This file was generated by [verb-generate-readme](https://github.com/verbose/verb-generate-readme), v0.6.0, on May 28, 2017._
+_This file was generated by [verb-generate-readme](https://github.com/verbose/verb-generate-readme), v0.6.0, on December 09, 2017._
