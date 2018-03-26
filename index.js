@@ -1,5 +1,6 @@
 'use strict';
 
+const assert = require('assert');
 const path = require('path');
 const glob = require('matched');
 const read = require('read-data');
@@ -52,10 +53,7 @@ class MergeConfig {
    */
 
   setType(type, settings) {
-    if (typeof type !== 'string') {
-      throw new TypeError('expected type to be a string');
-    }
-
+    assert(typeof type === 'string', 'expected type to be a string');
     settings = Object.assign({}, settings);
     settings.patterns = arrayify(settings.patterns);
     settings = merge({files: [], data: {}}, this.defaults, settings);
@@ -75,9 +73,7 @@ class MergeConfig {
    */
 
   getType(type) {
-    if (typeof type !== 'string') {
-      throw new TypeError('expected type to be a string');
-    }
+    assert(this.types.hasOwnProperty(type), `config type "${type}" does not exist`);
     if (!this.types.hasOwnProperty(type)) {
       throw new Error(`config type "${type}" does not exist`);
     }
@@ -95,6 +91,7 @@ class MergeConfig {
    */
 
   type(type, settings) {
+    assert(typeof type === 'string', 'expected type to be a string');
     if (typeof settings === 'undefined') {
       return this.getType(type);
     }
@@ -111,12 +108,13 @@ class MergeConfig {
    */
 
   resolve(type) {
+    assert(typeof type === 'string', 'expected type to be a string');
     const config = this.type(type);
     const files = glob.sync(config.patterns, config.options);
     const cwd = config.options.cwd;
     const res = [];
 
-    for (let filename of files) {
+    for (const filename of files) {
       const filepath = path.resolve(cwd, filename);
       const file = new File({path: filepath, cwd: cwd});
       if (typeof config.filter === 'function') {
@@ -156,17 +154,11 @@ class MergeConfig {
    * @api public
    */
 
-  loader(extname, fn) {
-    if (typeof extname !== 'string') {
-      throw new TypeError('expected extname to be a string');
-    }
-    if (typeof fn !== 'function') {
-      throw new TypeError('expected loader to be a function');
-    }
-    if (extname[0] !== '.') {
-      extname = '.' + extname;
-    }
-    this.loaders[extname] = fn;
+  loader(ext, fn) {
+    assert(typeof fn === 'function', 'expected loader to be a function');
+    assert(typeof ext === 'string', 'expected extname to be a string');
+    if (ext[0] !== '.') ext = '.' + ext;
+    this.loaders[ext] = fn;
     return this;
   }
 
@@ -235,7 +227,7 @@ class MergeConfig {
 
   merge(types, fn) {
     if (typeof types === 'function') return this.merge(null, types);
-    if (typeof fn !== 'function') fn = configType => configType.data;
+    if (typeof fn !== 'function') fn = obj => obj.data;
     if (!types) types = Object.keys(this.types);
 
     let config = {};
