@@ -1,35 +1,40 @@
 'use strict';
 
-const assert = require('assert');
 const path = require('path');
-const glob = require('matched');
+const assert = require('assert');
+const Emitter = require('@sellside/emitter');
 const read = require('read-data');
-const arrayify = require('arrayify-compact');
 const merge = require('merge-deep');
+const glob = require('matched');
 const File = require('vinyl');
 
 /**
- * Create an instance of `MergeConfig` with the given `options`.
+ * Create an instance of `MergeConfigs` with the given `options`.
  *
  * ```js
  * const MergeConfigs = require('merge-configs');
  * const mergeConfigs = new MergeConfigs();
  * ```
  * @param {Object} `options`
- * @return {Object} Instance of `MergeConfig`
+ * @return {Object} Instance of `MergeConfigs`
  * @api public
  */
 
-class MergeConfig {
-  constructor(defaults) {
-    this.defaults = Object.assign({}, defaults);
-    this.defaults.patterns = arrayify(this.defaults.patterns);
+class MergeConfig extends Emitter {
+  constructor(config) {
+    super();
+    this.config = Object.assign({}, config);
+    this.defaults = { options: {}, files: [], data: {} };
 
-    this.options = this.defaults.options || {};
+    if (typeof this.config.patterns === 'string') {
+      this.config.patterns = [this.config.patterns];
+    }
+
+    this.options = this.config.options || {};
     this.loaders = {};
     this.types = {};
 
-    if (this.options.builtins !== false) {
+    if (this.options.builtinLoaders !== false) {
       this.builtins();
     }
   }
@@ -42,7 +47,11 @@ class MergeConfig {
     this.loader('yml', file => read.yaml.sync(file.path));
     this.loader('yaml', file => read.yaml.sync(file.path));
     this.loader('json', file => read.json.sync(file.path));
-    this.loader('js', file => require(file.path));
+    this.loader('js', file => {
+      const contents = require(file.path);
+      delete require.cache[file.path];
+      return contents;
+    });
   }
 
   /**
@@ -52,16 +61,15 @@ class MergeConfig {
    * @return {Object}
    */
 
-  setType(type, settings) {
+  setType(type, config) {
     assert(typeof type === 'string', 'expected type to be a string');
-    settings = Object.assign({}, settings);
-    settings.patterns = arrayify(settings.patterns);
-    settings = merge({files: [], data: {}}, this.defaults, settings);
+    const settings = merge({ type }, this.defaults, this.config, config);
 
-    if (settings.patterns.length === 0) {
-      throw new TypeError('expected glob patterns to be a string or array');
+    if (typeof settings.patterns === 'string') {
+      settings.patterns = [settings.patterns];
     }
 
+    assert(settings.patterns.length > 0, 'expected glob to be a string or array');
     this.types[type] = settings;
     return this;
   }
@@ -74,9 +82,6 @@ class MergeConfig {
 
   getType(type) {
     assert(this.types.hasOwnProperty(type), `config type "${type}" does not exist`);
-    if (!this.types.hasOwnProperty(type)) {
-      throw new Error(`config type "${type}" does not exist`);
-    }
     return this.types[type];
   }
 
@@ -91,7 +96,7 @@ class MergeConfig {
    */
 
   type(type, settings) {
-    assert(typeof type === 'string', 'expected type to be a string');
+    assert.equal(typeof type, 'string', 'expected type to be a string');
     if (typeof settings === 'undefined') {
       return this.getType(type);
     }
@@ -108,23 +113,22 @@ class MergeConfig {
    */
 
   resolve(type) {
-    assert(typeof type === 'string', 'expected type to be a string');
+    assert.equal(typeof type, 'string', 'expected type to be a string');
     const config = this.type(type);
     const files = glob.sync(config.patterns, config.options);
-    const cwd = config.options.cwd;
-    const res = [];
+    const cwd = config.options.cwd || process.cwd();
+    const configFiles = [];
 
     for (const filename of files) {
       const filepath = path.resolve(cwd, filename);
-      const file = new File({path: filepath, cwd: cwd});
-      if (typeof config.filter === 'function') {
-        if (config.filter(file) === false) {
-          continue;
-        }
+      const file = new File({ path: filepath, cwd: cwd });
+      if (typeof config.filter === 'function' && !config.filter(file)) {
+        continue;
       }
-      res.push(file);
+      configFiles.push(file);
     }
-    return res;
+    this.emit('resolved', type, configFiles);
+    return configFiles;
   }
 
   /**
@@ -155,28 +159,11 @@ class MergeConfig {
    */
 
   loader(ext, fn) {
-    assert(typeof fn === 'function', 'expected loader to be a function');
-    assert(typeof ext === 'string', 'expected extname to be a string');
+    assert.equal(typeof fn, 'function', 'expected loader to be a function');
+    assert.equal(typeof ext, 'string', 'expected extname to be a string');
     if (ext[0] !== '.') ext = '.' + ext;
     this.loaders[ext] = fn;
     return this;
-  }
-
-  /**
-   * Load one or more config types.
-   *
-   * @param {String|Array} `types` Loads all types if undefined.
-   * @return {Object} Returns the merged config object.
-   * @api public
-   */
-
-  load(types) {
-    const configs = {};
-    if (!types) types = Object.keys(this.types);
-    for (const type of arrayify(types)) {
-      configs[type] = this.loadType(type);
-    }
-    return configs;
   }
 
   /**
@@ -191,9 +178,33 @@ class MergeConfig {
     config.files = files;
 
     for (const file of files) {
-      config.data = merge({}, config.data, this.loadFile(file, config));
+      const data = this.loadFile(file, config);
+      if (data && typeof data === 'object') {
+        config.data = merge({}, config.data, data);
+      }
     }
     return config;
+  }
+
+  /**
+   * Load one or more config types.
+   *
+   * @param {String|Array} `types` Loads all types if undefined.
+   * @return {Object} Returns the merged config object.
+   * @api public
+   */
+
+  load(types) {
+    const configs = {};
+    if (!types) types = Object.keys(this.types);
+    if (typeof types === 'string') types = [types];
+    for (const type of types) {
+      configs[type] = this.loadType(type);
+    }
+    configs.merge = () => {
+      return types.reduce((acc, type) => merge({}, acc, configs[type].data), {});
+    };
+    return configs;
   }
 
   /**
@@ -205,11 +216,8 @@ class MergeConfig {
 
   loadFile(file, config) {
     const loader = this.loaders[file.extname];
-    if (!loader) {
-      throw new Error('no loaders exist for: ' + file.extname);
-    }
-
-    file.data = loader.call(this, file);
+    assert(loader, 'no loaders are registered for: ' + file.extname);
+    file.data = loader.call(this, file, config);
 
     if (typeof config.load === 'function') {
       file.data = config.load.call(this, file, config);
@@ -229,12 +237,15 @@ class MergeConfig {
     if (typeof types === 'function') return this.merge(null, types);
     if (typeof fn !== 'function') fn = obj => obj.data;
     if (!types) types = Object.keys(this.types);
+    if (typeof types === 'string') types = [types];
 
-    let config = {};
-    for (const type of arrayify(types)) {
-      config = merge({}, config, fn(this.getType(type), config));
+    const config = this.load(types);
+    let res = {};
+
+    for (const type of types) {
+      res = merge({}, res, fn(config[type]));
     }
-    return config;
+    return res;
   }
 }
 

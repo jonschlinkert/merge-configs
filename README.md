@@ -71,7 +71,7 @@ mergeConfig.type('local', {
   filter: file => {
     return file.stem === 'foo'
   }
-})
+});
 ```
 
 ### Params
