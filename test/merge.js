@@ -8,8 +8,8 @@ const MergeConfig = require('..');
 const fixtures = path.join.bind(path, __dirname, 'fixtures');
 let config;
 
-describe('.load', () => {
-  beforeEach(function() {
+describe('.merge', () => {
+  beforeEach(() => {
     config = new MergeConfig();
     config.loader('yml', file => read.yaml.sync(file.path));
     config.loader('yaml', file => read.yaml.sync(file.path));
@@ -19,7 +19,7 @@ describe('.load', () => {
     assert.throws(() => config.load('foo'), /does not exist/);
   });
 
-  it('should load the given config type', () => {
+  it('should merge the given config type', () => {
     config.type('fixtures', {
       patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
       options: {
@@ -27,16 +27,89 @@ describe('.load', () => {
       }
     });
 
-    const configs = config.load('fixtures');
+    const data = config.merge('fixtures');
 
-    assert.deepEqual(configs.fixtures.data, {
+    assert.deepEqual(data, {
       layout: true,
       list: ['one', 'two', 'three'],
       tags: ['a', 'b', 'c']
     });
   });
 
-  it('should load multiple config types', () => {
+  it('should merge multiple config types', () => {
+    config.type('cwd', {
+      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
+      options: {
+        cwd: fixtures('cwd')
+      }
+    });
+
+    config.type('other', {
+      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
+      options: {
+        cwd: fixtures('other')
+      }
+    });
+
+    config.type('local', {
+      patterns: [
+        'fixture-config-*/.fixture.{json,yml}',
+        'fixture-config-*/fixturefile.js'
+      ],
+      options: {
+        cwd: fixtures('local/node_modules')
+      }
+    });
+
+    const data = config.merge(['cwd', 'local', 'other']);
+
+    assert.deepEqual(data, {
+      layout: true,
+      categories: ['x', 'y', 'z'],
+      items: ['four', 'five', 'six'],
+      list: ['one', 'two', 'three', 'four', 'five', 'six'],
+      tags: ['a', 'b', 'c']
+    });
+  });
+
+  it('should merge using the config.merge() method returned on the object', () => {
+    config.type('cwd', {
+      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
+      options: {
+        cwd: fixtures('cwd')
+      }
+    });
+
+    config.type('other', {
+      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
+      options: {
+        cwd: fixtures('other')
+      }
+    });
+
+    config.type('local', {
+      patterns: [
+        'fixture-config-*/.fixture.{json,yml}',
+        'fixture-config-*/fixturefile.js'
+      ],
+      options: {
+        cwd: fixtures('local/node_modules')
+      }
+    });
+
+    const configs = config.load(['cwd', 'local', 'other']);
+    const data = configs.merge();
+
+    assert.deepEqual(data, {
+      layout: true,
+      categories: ['x', 'y', 'z'],
+      items: ['four', 'five', 'six'],
+      list: ['one', 'two', 'three', 'four', 'five', 'six'],
+      tags: ['a', 'b', 'c']
+    });
+  });
+
+  it('should merge all config types', () => {
     config.type('cwd', {
       patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
       options: {
@@ -54,79 +127,12 @@ describe('.load', () => {
       }
     });
 
-    const configs = config.load(['cwd', 'local']);
+    const data = config.merge();
 
-    assert.deepEqual(configs.cwd.data, {
-      layout: true,
-      list: ['one', 'two', 'three'],
-      tags: ['a', 'b', 'c']
-    });
-
-    assert.deepEqual(configs.local.data, {
+    assert.deepEqual(data, {
       layout: true,
       categories: ['x', 'y', 'z'],
       items: ['four', 'five', 'six'],
-      list: ['one', 'two', 'three'],
-      tags: ['a', 'b', 'c']
-    });
-  });
-
-  it('should load all config types', () => {
-    config.type('cwd', {
-      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
-      options: {
-        cwd: fixtures('cwd')
-      }
-    });
-
-    config.type('local', {
-      patterns: [
-        'fixture-config-*/.fixture.{json,yml}',
-        'fixture-config-*/fixturefile.js'
-      ],
-      options: {
-        cwd: fixtures('local/node_modules')
-      }
-    });
-
-    const configs = config.load();
-
-    assert.deepEqual(configs.cwd.data, {
-      layout: true,
-      list: ['one', 'two', 'three'],
-      tags: ['a', 'b', 'c']
-    });
-
-    assert.deepEqual(configs.local.data, {
-      layout: true,
-      categories: ['x', 'y', 'z'],
-      items: ['four', 'five', 'six'],
-      list: ['one', 'two', 'three'],
-      tags: ['a', 'b', 'c']
-    });
-  });
-
-  it('should call a load function on each file in a config type', () => {
-    let count = 0;
-
-    config.type('fixtures', {
-      patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
-      load(file, configs) {
-        file.data[count] = count++;
-        return file.data;
-      },
-      options: {
-        cwd: fixtures('cwd')
-      }
-    });
-
-    const configs = config.load('fixtures');
-
-    assert.deepEqual(configs.fixtures.data, {
-      '0': 0,
-      '1': 1,
-      '2': 2,
-      layout: true,
       list: ['one', 'two', 'three'],
       tags: ['a', 'b', 'c']
     });

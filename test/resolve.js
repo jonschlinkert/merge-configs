@@ -7,24 +7,24 @@ const MergeConfig = require('..');
 const fixtures = path.join.bind(path, __dirname, 'fixtures');
 let config;
 
-describe('.resolve', function() {
-  beforeEach(function() {
+describe('.resolve', () => {
+  beforeEach(() => {
     config = new MergeConfig();
   });
 
-  it('should throw an error when type is not a string', function() {
-    assert.throws(function() {
+  it('should throw an error when type is not a string', () => {
+    assert.throws(() => {
       config.resolve();
     }, /expected type to be a string/);
   });
 
-  it('should throw an error when a config type does not exist', function() {
-    assert.throws(function() {
+  it('should throw an error when a config type does not exist', () => {
+    assert.throws(() => {
       config.resolve('foo');
     }, /does not exist/);
   });
 
-  it('should resolve files for the given type', function() {
+  it('should resolve files for the given type', () => {
     config.type('fixtures', {
       patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
       options: {
@@ -39,7 +39,7 @@ describe('.resolve', function() {
     assert.equal(files[2].basename, 'fixturefile.js');
   });
 
-  it('should filter files when a filter function is passed on config', function() {
+  it('should filter files when a filter function is passed on config', () => {
     config.type('fixtures', {
       patterns: ['.fixture.{json,yml}', 'fixturefile.js'],
       filter: file => file.basename !== 'fixturefile.js',
@@ -55,7 +55,7 @@ describe('.resolve', function() {
     assert.equal(typeof files[2], 'undefined');
   });
 
-  it('should filter files when defined on the ctor', function() {
+  it('should filter files when defined on the ctor', () => {
     config = new MergeConfig({
       filter: file => file.basename !== 'fixturefile.js'
     });

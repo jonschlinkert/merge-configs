@@ -7,15 +7,16 @@ const MergeConfig = require('..');
 const fixtures = path.join.bind(path, __dirname, 'fixtures');
 let config;
 
-describe('.type', function() {
-  beforeEach(function() {
+describe('.type', () => {
+  beforeEach(() => {
     config = new MergeConfig({options: {cwd: fixtures()}});
   });
 
-  it('should add a config type to config.types (.setType)', function() {
+  it('should add a config type to config.types (.setType)', () => {
     config.setType('cwd', { patterns: ['.foorc.json'] });
 
     assert.deepEqual(config.types.cwd, {
+      type: 'cwd',
       patterns: ['.foorc.json'],
       options: {
         cwd: fixtures()
@@ -25,10 +26,11 @@ describe('.type', function() {
     });
   });
 
-  it('should add a config type to config.types (.type)', function() {
+  it('should add a config type to config.types (.type)', () => {
     config.type('cwd', { patterns: ['.foorc.json'] });
 
     assert.deepEqual(config.types.cwd, {
+      type: 'cwd',
       patterns: ['.foorc.json'],
       options: {
         cwd: fixtures()
@@ -38,7 +40,7 @@ describe('.type', function() {
     });
   });
 
-  it('should merge constructor options with type options', function() {
+  it('should merge constructor options with type options', () => {
     config = new MergeConfig({
       options: {
         foo: 'bar',
@@ -58,6 +60,7 @@ describe('.type', function() {
     });
 
     assert.deepEqual(config.types.cwd, {
+      type: 'cwd',
       patterns: ['.foorc.json'],
       options: {
         foo: 'bar',
