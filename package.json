@@ -20,19 +20,13 @@
     "test": "mocha"
   },
   "dependencies": {
-    "@sellside/emitter": "^1.2.1",
-    "find-pkg": "^2.0.0",
-    "global-modules": "^1.0.0",
-    "homedir-polyfill": "^1.0.1",
-    "matched": "^2.0.1",
-    "merge-deep": "^3.0.1",
-    "npm-paths": "^1.0.0",
-    "read-data": "^1.1.0",
-    "vinyl": "^2.1.0"
+    "matched": "^3.0.1"
   },
   "devDependencies": {
-    "gulp-format-md": "^1.0.0",
-    "mocha": "^3.5.3"
+    "global-modules": "^1.0.0",
+    "gulp-format-md": "^2.0.0",
+    "mocha": "^5.2.0",
+    "read-data": "^1.1.0"
   },
   "keywords": [
     "configs",

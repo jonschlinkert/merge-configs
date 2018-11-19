@@ -1,12 +1,10 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
-const Emitter = require('@sellside/emitter');
-const read = require('read-data');
-const merge = require('merge-deep');
+const Events = require('events');
 const glob = require('matched');
-const File = require('vinyl');
 
 /**
  * Create an instance of `MergeConfigs` with the given `options`.
@@ -20,7 +18,7 @@ const File = require('vinyl');
  * @api public
  */
 
-class MergeConfig extends Emitter {
+class MergeConfig extends Events {
   constructor(config) {
     super();
     this.config = Object.assign({}, config);
@@ -44,9 +42,7 @@ class MergeConfig extends Emitter {
    */
 
   builtins() {
-    this.loader('yml', file => read.yaml.sync(file.path));
-    this.loader('yaml', file => read.yaml.sync(file.path));
-    this.loader('json', file => read.json.sync(file.path));
+    this.loader('json', file => JSON.parse(fs.readFileSync(file.path)));
     this.loader('js', file => {
       const contents = require(file.path);
       delete require.cache[file.path];
@@ -121,7 +117,7 @@ class MergeConfig extends Emitter {
 
     for (const filename of files) {
       const filepath = path.resolve(cwd, filename);
-      const file = new File({ path: filepath, cwd: cwd });
+      const file = new File({ path: filepath, cwd });
       if (typeof config.filter === 'function' && !config.filter(file)) {
         continue;
       }
@@ -195,12 +191,10 @@ class MergeConfig extends Emitter {
    */
 
   load(types) {
-    const configs = {};
+    let configs = {};
     if (!types) types = Object.keys(this.types);
     if (typeof types === 'string') types = [types];
-    for (const type of types) {
-      configs[type] = this.loadType(type);
-    }
+    for (let type of types) configs[type] = this.loadType(type);
     configs.merge = () => {
       return types.reduce((acc, type) => merge({}, acc, configs[type].data), {});
     };
@@ -215,13 +209,14 @@ class MergeConfig extends Emitter {
    */
 
   loadFile(file, config) {
-    const loader = this.loaders[file.extname];
+    let loader = this.loaders[file.extname];
     assert(loader, 'no loaders are registered for: ' + file.extname);
     file.data = loader.call(this, file, config);
 
     if (typeof config.load === 'function') {
       file.data = config.load.call(this, file, config);
     }
+
     return file.data;
   }
 
@@ -233,10 +228,15 @@ class MergeConfig extends Emitter {
    * @api public
    */
 
-  merge(types, fn) {
+  merge(types, options, fn) {
+    if (typeof options === 'function') {
+      fn = options;
+      options = void 0;
+    }
+
+    if (!types || types === '*') types = Object.keys(this.types);
     if (typeof types === 'function') return this.merge(null, types);
     if (typeof fn !== 'function') fn = obj => obj.data;
-    if (!types) types = Object.keys(this.types);
     if (typeof types === 'string') types = [types];
 
     const config = this.load(types);
@@ -245,8 +245,88 @@ class MergeConfig extends Emitter {
     for (const type of types) {
       res = merge({}, res, fn(config[type]));
     }
-    return res;
+
+    return options ? merge({}, options, res) : res;
   }
+}
+
+class File {
+  constructor(file) {
+    this.path = file.path;
+    this.cwd = file.cwd;
+  }
+  get dirname() {
+    return path.dirname(this.path);
+  }
+  get basename() {
+    return path.basename(this.path);
+  }
+  get stem() {
+    return path.basename(this.path, this.extname);
+  }
+  get extname() {
+    return path.extname(this.path);
+  }
+}
+
+function merge(target, ...rest) {
+  let orig = clone(target);
+  for (let obj of rest) {
+    if (isObject(obj) || Array.isArray(obj)) {
+      for (let key of Object.keys(obj)) {
+        if (key !== '__proto__' && key !== 'constructor') {
+          mixin(orig, obj[key], key);
+        }
+      }
+    }
+  }
+  return orig;
+}
+
+function mixin(target, val, key) {
+  let orig = target[key];
+  if (isObject(val) && isObject(orig)) {
+    target[key] = merge(orig, val);
+  } else if (Array.isArray(val)) {
+    target[key] = union([], orig, val);
+  } else {
+    target[key] = clone(val);
+  }
+  return target;
+}
+
+function union(...args) {
+  return [...new Set([].concat.apply([], args).filter(Boolean))];
+}
+
+function clone(value) {
+  let obj = {};
+  switch (typeOf(value)) {
+    case 'array':
+      return value.map(clone);
+    case 'object':
+      for (let key of Object.keys(value)) {
+        obj[key] = clone(value[key]);
+      }
+      return obj;
+    default: {
+      return value;
+    }
+  }
+}
+
+function typeOf(val) {
+  if (val === null) return 'null';
+  if (val === void 0) return 'undefiend';
+  if (val instanceof RegExp) return 'regexp';
+  if (typeof val === 'number') return 'number';
+  if (typeof val === 'string') return 'string';
+  if (Array.isArray(val)) return 'array';
+  return typeof val;
+}
+
+function isObject(val) {
+  return (typeof val === 'object' && val !== null && !Array.isArray(val));
 }
 
 /**
